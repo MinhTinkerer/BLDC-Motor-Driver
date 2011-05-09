@@ -19,3 +19,6 @@ main.elf: main.o
 
 flash:
 	$(PROG) -c usbtiny -p t861 -U flash:w:main.hex
+
+fuse:
+	$(PROG) -c usbtiny -p t861 -U lfuse:w:0xcf:m -U hfuse:w:0xdf:m

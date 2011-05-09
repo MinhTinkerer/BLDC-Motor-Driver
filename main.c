@@ -32,12 +32,12 @@
  * 7   6   5   4   3   2   1   0
  * 0   0   AH  AL  BH  BL  CH  CL */
 static const uint8_t wavetable[7] = {
-		STATE(OFF,  LOW,  LOW),  /* phase 0 */
-		STATE(HIGH, OFF,  LOW),  /* phase 1 */
-		STATE(HIGH, HIGH, OFF),  /* phase 2 */
-		STATE(OFF,  HIGH, HIGH), /* phase 3 */
-		STATE(LOW,  OFF,  HIGH), /* phase 4 */
-		STATE(LOW,  LOW,  OFF),  /* phase 5 */
+		STATE(HIGH, OFF,  LOW),  /* phase 0 */
+		STATE(HIGH, LOW,  OFF),  /* phase 1 */
+		STATE(OFF,  LOW,  HIGH), /* phase 2 */
+		STATE(LOW,  OFF,  HIGH), /* phase 3 */
+		STATE(LOW,  HIGH, OFF),  /* phase 4 */
+		STATE(OFF,  HIGH, LOW),  /* phase 5 */
 		STATE(OFF,  OFF,  OFF)   /* disabled/error */
 };
 
@@ -46,17 +46,17 @@ static const uint8_t wavetable[7] = {
  * 0   0   0   0   0   A   B   C */
 static inline uint8_t statemap(uint8_t state) {
     switch (state) {
-        case 0b00000000:
+        case 0b00000110:
             return 0x00;
         case 0b00000100:
             return 0x01;
-        case 0b00000110:
+        case 0b00000101:
             return 0x02;
-        case 0b00000111:
+        case 0b00000001:
             return 0x03;
         case 0b00000011:
             return 0x04;
-        case 0b00000001:
+        case 0b00000010:
             return 0x05;
         default:
             return 0x06;
@@ -83,6 +83,7 @@ volatile uint8_t  stalled   = 1;
 volatile uint16_t commtimer = 0;
 volatile uint16_t spintimer = 0;
 
+/* Back-emf pin-change interrupt */
 ISR(PCINT_vect) {
     if (!stalled) {
         commtimer   = 0;
