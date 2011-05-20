@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
+#include <util/atomic.h>
 
 #include "spinuptimings.h"
 
@@ -32,13 +33,13 @@
  * 7   6   5   4   3   2   1   0
  * 0   0   AH  AL  BH  BL  CH  CL */
 static const uint8_t wavetable[7] = {
-		STATE(HIGH, OFF,  LOW),  /* phase 0 */
-		STATE(HIGH, LOW,  OFF),  /* phase 1 */
-		STATE(OFF,  LOW,  HIGH), /* phase 2 */
-		STATE(LOW,  OFF,  HIGH), /* phase 3 */
-		STATE(LOW,  HIGH, OFF),  /* phase 4 */
-		STATE(OFF,  HIGH, LOW),  /* phase 5 */
-		STATE(OFF,  OFF,  OFF)   /* disabled/error */
+        STATE(HIGH, OFF,  LOW),  /* phase 0 */
+        STATE(HIGH, LOW,  OFF),  /* phase 1 */
+        STATE(OFF,  LOW,  HIGH), /* phase 2 */
+        STATE(LOW,  OFF,  HIGH), /* phase 3 */
+        STATE(LOW,  HIGH, OFF),  /* phase 4 */
+        STATE(OFF,  HIGH, LOW),  /* phase 5 */
+        STATE(OFF,  OFF,  OFF)   /* disabled/error */
 };
 
 /* Back EMF input format:
@@ -64,17 +65,17 @@ static inline uint8_t statemap(uint8_t state) {
 }
 
 static inline void bldc_waveout(uint8_t index) {
-	uint8_t bits = DRV_PORT;
-	uint8_t wave = wavetable[index];
-	DRV_PORT = ((wave << DRV_SHIFT) & DRV_MASK) | (bits & ~DRV_MASK);
+    uint8_t bits = DRV_PORT;
+    uint8_t wave = wavetable[index];
+    DRV_PORT = ((wave << DRV_SHIFT) & DRV_MASK) | (bits & ~DRV_MASK);
 }
 
 static inline uint8_t bldc_sense() {
-	uint8_t state;
-	state  = GET(BEMF_APORT, BEMF_APIN) << 2;
-	state |= GET(BEMF_BPORT, BEMF_BPIN) << 1;
-	state |= GET(BEMF_CPORT, BEMF_CPIN);
-	return statemap(state);
+    uint8_t state;
+    state  = GET(BEMF_APORT, BEMF_APIN) << 2;
+    state |= GET(BEMF_BPORT, BEMF_BPIN) << 1;
+    state |= GET(BEMF_CPORT, BEMF_CPIN);
+    return statemap(state);
 }
 
 volatile uint8_t  waveindex = 0x06;
@@ -99,14 +100,14 @@ ISR(TIMER0_COMPA_vect) {
 }
 
 void init_ports() {
-	DDRA  = 0b11111100;
-	PORTA = 0b10101000;
-	DDRB  = 0b00001000;
-	PORTB = 0b00001000;
+    DDRA  = 0b11111100;
+    PORTA = 0b10101000;
+    DDRB  = 0b00001000;
+    PORTB = 0b00001000;
 
-	GIMSK  = _BV(PCIE0)  | _BV(PCIE1);  /* enable pin-change interrupts */
-	PCMSK0 = _BV(PCINT0) | _BV(PCINT1);
-	PCMSK1 = _BV(PCINT14);
+    GIMSK  = _BV(PCIE0)  | _BV(PCIE1);  /* enable pin-change interrupts */
+    PCMSK0 = _BV(PCINT0) | _BV(PCINT1);
+    PCMSK1 = _BV(PCINT14);
 }
 
 void init_timers() {
@@ -118,12 +119,19 @@ void init_timers() {
 }
 
 void spinup() {
-    uint16_t time;
+    uint16_t stimer, time;
 
     spintimer = 0;
     for (uint16_t i=0; i<SPINUP_TIMINGS_SIZE; i++) {
-        time = spinup_timings[i];
-        while (spintimer < time) { wdt_reset(); }
+        time = pgm_read_word(spinup_timings + i);
+        for (;;) {
+            ATOMIC_BLOCK(ATOMIC_FORCEON) {
+                stimer = spintimer;
+            }
+            if (stimer >= time) break;
+
+            wdt_reset();
+        }
 
         waveindex = (waveindex + 1) % 6;
         bldc_waveout(waveindex);
@@ -131,15 +139,23 @@ void spinup() {
 }
 
 int main(void) {
+    uint16_t ctimer;
+
     init_ports();
     init_timers();
 
-    sei();
+    /* clear flags and enable interrupts */
+    TIFR = _BV(OCF0A); /* timer 0 output compare A */
+    GIFR = _BV(PCIF);  /* pin-change interrupt */
+    sei(); /* enable interrupts */
 
     for (;;) {
-        if (commtimer > COM_PERIOD_MAX) {
-            stalled = 1;
+        ATOMIC_BLOCK(ATOMIC_FORCEON) {
+            ctimer = commtimer;
         }
+        if (ctimer > COM_PERIOD_MAX)
+            stalled = 1;
+
         if (stalled) {
             spinup();
             stalled = 0;

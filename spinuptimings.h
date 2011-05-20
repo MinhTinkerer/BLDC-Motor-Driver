@@ -1,5 +1,7 @@
+#include <avr/pgmspace.h>
+
 #define SPINUP_TIMINGS_SIZE 512
-uint16_t spinup_timings[SPINUP_TIMINGS_SIZE] = {
+const uint16_t spinup_timings[SPINUP_TIMINGS_SIZE] PROGMEM = {
     0,
 	1666,
 	2356,

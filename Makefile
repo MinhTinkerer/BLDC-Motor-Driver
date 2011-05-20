@@ -9,7 +9,7 @@ clean:
 	rm -f main.hex main.elf main.o
 
 main.hex: main.elf
-	$(OBJCPY) -j .text -O ihex main.elf main.hex
+	$(OBJCPY) -j .text -j .data -O ihex main.elf main.hex
 
 main.elf: main.o
 	$(CC) -o main.elf main.o
@@ -17,7 +17,7 @@ main.elf: main.o
 .o:
 	$(CC) $(CFLAGS) -c $*.c
 
-flash:
+flash: main.hex
 	$(PROG) -c usbtiny -p t861 -U flash:w:main.hex
 
 fuse:
